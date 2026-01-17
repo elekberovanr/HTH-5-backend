@@ -14,7 +14,8 @@ const PORT = process.env.PORT || 5555;
 /* =========================
    ✅ 0) URL-lar (BURANI DƏYİŞ)
 ========================= */
-const FRONTEND_URL = "https://hth-5-frontend.vercel.app"; // <-- BURANI öz Vercel domeninlə dəyiş
+const FRONTEND_URL = "https://hthfrontend.vercel.app";
+ // <-- BURANI öz Vercel domeninlə dəyiş
 
 const allowedOrigins = [
   FRONTEND_URL,
