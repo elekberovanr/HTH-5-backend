@@ -117,34 +117,26 @@ const updateUser = async (req, res) => {
 const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
+
     const user = await User.findOne({ email });
-    if (!user) return res.status(404).json({ error: 'İstifadəçi tapılmadı' });
+    if (!user) {
+      return res.status(404).json({ error: 'İstifadəçi tapılmadı' });
+    }
 
     const code = Math.floor(100000 + Math.random() * 900000).toString();
     user.resetCode = code;
     user.resetCodeExpires = Date.now() + 10 * 60 * 1000;
     await user.save();
 
-    const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
+    // ⛔ MAIL YOX
+    return res.json({
+      message: 'Kod yaradıldı (mail hələlik deaktivdir)',
+      // test üçün istəsən:
+      // code,
     });
-
-    const mailOptions = {
-      from: process.env.EMAIL_USER,
-      to: email,
-      subject: 'HTH Şifrə sıfırlama kodu',
-      text: `Kodunuz: ${code}`,
-    };
-
-    await transporter.sendMail(mailOptions);
-    return res.json({ message: 'Kod göndərildi' });
   } catch (err) {
-    console.error('Mail xətası:', err);
-    return res.status(500).json({ error: 'Kod göndərilə bilmədi' });
+    console.error(err);
+    return res.status(500).json({ error: 'Server xətası' });
   }
 };
 
