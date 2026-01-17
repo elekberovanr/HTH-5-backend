@@ -2,8 +2,57 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const nodemailer = require('nodemailer');
-const axios = require('axios');
 
+// ✅ REGISTER (captcha YOX + şəkil optional)
+const register = async (req, res) => {
+  try {
+    const { name, email, password, gender, birthday, city } = req.body;
+
+    // 1) Field check (captcha yoxdur)
+    if (!name || !email || !password || !gender || !birthday || !city) {
+      return res.status(400).json({
+        error: 'Bütün sahələr doldurulmalıdır.',
+      });
+    }
+
+    // 2) Check existing user
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({ error: 'Bu email ilə artıq istifadəçi mövcuddur' });
+    }
+
+    // 3) Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // 4) Optional profile image (multer fields istifadə edirik)
+    const profileImage = req.files?.profileImage?.[0]?.filename || 'Default-User.png';
+
+    // 5) Create user
+    const user = new User({
+      name,
+      email,
+      password: hashedPassword,
+      gender,
+      birthday: new Date(birthday),
+      city,
+      profileImage,
+    });
+
+    await user.save();
+
+    // 6) Token
+    const token = jwt.sign(
+      { userId: user._id, isAdmin: user.isAdmin },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    return res.status(201).json({ token, user });
+  } catch (err) {
+    console.error('❌ Register error:', err);
+    return res.status(500).json({ error: 'Server xətası baş verdi' });
+  }
+};
 
 // 🔑 Login
 const login = async (req, res) => {
@@ -16,16 +65,16 @@ const login = async (req, res) => {
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(400).json({ error: 'Parol yanlışdır' });
 
-    // ✅ isAdmin əlavə olunur:
     const token = jwt.sign(
       { userId: user._id, isAdmin: user.isAdmin },
       process.env.JWT_SECRET,
       { expiresIn: '7d' }
     );
 
-    res.json({ token, user });
+    return res.json({ token, user });
   } catch (err) {
-    res.status(500).json({ error: 'Server xətası' });
+    console.error('Login error:', err);
+    return res.status(500).json({ error: 'Server xətası' });
   }
 };
 
@@ -34,9 +83,10 @@ const getMe = async (req, res) => {
   try {
     const user = await User.findById(req.userId).select('-password');
     if (!user) return res.status(404).json({ error: 'İstifadəçi tapılmadı' });
-    res.json(user);
+    return res.json(user);
   } catch (err) {
-    res.status(500).json({ error: 'Xəta baş verdi' });
+    console.error('GetMe error:', err);
+    return res.status(500).json({ error: 'Xəta baş verdi' });
   }
 };
 
@@ -47,22 +97,21 @@ const updateUser = async (req, res) => {
 
     const updatedData = { name, city, gender, birthday };
 
-    if (req.files?.profileImage && req.files.profileImage[0]) {
+    if (req.files?.profileImage?.[0]) {
       updatedData.profileImage = req.files.profileImage[0].filename;
     }
 
-    if (req.files?.bannerImage && req.files.bannerImage[0]) {
+    if (req.files?.bannerImage?.[0]) {
       updatedData.bannerImage = req.files.bannerImage[0].filename;
     }
 
     const updatedUser = await User.findByIdAndUpdate(userId, updatedData, { new: true });
-    res.status(200).json(updatedUser);
+    return res.status(200).json(updatedUser);
   } catch (err) {
     console.error('Profile update error:', err);
-    res.status(500).json({ message: 'Profil yenilənmədi' });
+    return res.status(500).json({ message: 'Profil yenilənmədi' });
   }
 };
-
 
 // 📩 Forgot Password
 const forgotPassword = async (req, res) => {
@@ -92,10 +141,10 @@ const forgotPassword = async (req, res) => {
     };
 
     await transporter.sendMail(mailOptions);
-    res.json({ message: 'Kod göndərildi' });
+    return res.json({ message: 'Kod göndərildi' });
   } catch (err) {
     console.error('Mail xətası:', err);
-    res.status(500).json({ error: 'Kod göndərilə bilmədi' });
+    return res.status(500).json({ error: 'Kod göndərilə bilmədi' });
   }
 };
 
@@ -114,65 +163,10 @@ const resetPassword = async (req, res) => {
     user.resetCodeExpires = undefined;
     await user.save();
 
-    res.json({ message: 'Şifrə yeniləndi' });
+    return res.json({ message: 'Şifrə yeniləndi' });
   } catch (err) {
-    res.status(500).json({ error: 'Şifrə dəyişdirilə bilmədi' });
-  }
-};
-
-// 🔐 REGISTER with reCAPTCHA
-const register = async (req, res) => {
-  try {
-    const { name, email, password, gender, birthday, city, captcha } = req.body;
-
-    // ✅ 1. Check missing fields
-    if (!name || !email || !password || !gender || !birthday || !city || !captcha) {
-      return res.status(400).json({ error: 'Bütün sahələr doldurulmalıdır və captcha təsdiqlənməlidir.' });
-    }
-
-    // ✅ 2. Validate captcha with Google
-    const verifyUrl = `https://www.google.com/recaptcha/api/siteverify?secret=${process.env.RECAPTCHA_SECRET_KEY}&response=${captcha}`;
-    const { data } = await axios.post(verifyUrl);
-
-    if (!data.success || data.score < 0.5) {
-      return res.status(400).json({ error: 'Captcha təsdiqlənmədi. Zəhmət olmasa yenidən cəhd edin.' });
-    }
-
-    // ✅ 3. Check if user already exists
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      return res.status(400).json({ error: 'Bu email ilə artıq istifadəçi mövcuddur' });
-    }
-
-    // ✅ 4. Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const profileImage = req.file?.filename || 'Default-User.png';
-
-    // ✅ 5. Create user
-    const user = new User({
-      name,
-      email,
-      password: hashedPassword,
-      gender,
-      birthday: new Date(birthday),
-      city,
-      profileImage,
-    });
-
-    await user.save();
-
-    // ✅ 6. Create token
-    const token = jwt.sign(
-      { userId: user._id, isAdmin: user.isAdmin },
-      process.env.JWT_SECRET,
-      { expiresIn: '7d' }
-    );
-
-    res.status(201).json({ token, user });
-
-  } catch (err) {
-    console.error('❌ Register error:', err.message);
-    res.status(500).json({ error: 'Server xətası baş verdi' });
+    console.error('Reset password error:', err);
+    return res.status(500).json({ error: 'Şifrə dəyişdirilə bilmədi' });
   }
 };
 

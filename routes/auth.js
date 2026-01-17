@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { verifyToken } = require('../middleware/authMiddleware');
 const multer = require('multer');
+
 const upload = multer({ dest: 'uploads/' });
 
 const {
@@ -13,10 +14,15 @@ const {
   resetPassword,
 } = require('../controllers/authController');
 
-// 🔐 Qeydiyyat və Giriş
+// 🔐 Login/Register
 router.post('/login', login);
-router.post('/register', upload.single('profileImage'), register);
 
+// ✅ Register: şəkil olsa da olmasa da işləsin
+router.post(
+  '/register',
+  upload.fields([{ name: 'profileImage', maxCount: 1 }]),
+  register
+);
 
 // 👤 Profil məlumatları
 router.get('/me', verifyToken, getMe);
@@ -29,7 +35,6 @@ router.put(
   ]),
   updateUser
 );
-
 
 router.post('/forgot-password', forgotPassword);
 router.post('/reset-password', resetPassword);
