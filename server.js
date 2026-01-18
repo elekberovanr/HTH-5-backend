@@ -15,10 +15,12 @@ const PORT = process.env.PORT || 5555;
    ✅ 0) URL-lar (BURANI DƏYİŞ)
 ========================= */
 const FRONTEND_URL = "https://hthfrontend.vercel.app";
+const FRONTEND_2URL = "https://handtohandmvp.vercel.app";
  // <-- BURANI öz Vercel domeninlə dəyiş
 
 const allowedOrigins = [
   FRONTEND_URL,
+  FRONTEND_2URL ,
   "http://localhost:5173",
   "http://localhost:5174",
   "http://localhost:5175",
