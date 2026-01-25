@@ -1,11 +1,24 @@
 const Product = require('../models/Product');
 const Category = require('../models/Category');
+const cloudinary = require("../utils/cloudinary");
+
 
 // ✅ ADD
 exports.addProduct = async (req, res) => {
   try {
     const { title, description, category } = req.body;
-    const images = req.files ? req.files.map(file => file.filename) : [];
+    const images = req.files
+      ? await Promise.all(
+        req.files.map((file) => {
+          return new Promise((resolve, reject) => {
+            cloudinary.uploader.upload_stream(
+              { folder: "hth/products" },
+              (err, res) => (err ? reject(err) : resolve(res.secure_url))
+            ).end(file.buffer);
+          });
+        })
+      )
+      : [];
 
     const product = await Product.create({
       title,
@@ -38,7 +51,7 @@ exports.getProducts = async (req, res) => {
 
 exports.getLatestProducts = async (req, res) => {
   try {
-    const latest = await Product.find({ user: { $exists: true } }) 
+    const latest = await Product.find({ user: { $exists: true } })
       .sort({ createdAt: -1 })
       .limit(6)
       .populate('user', 'name profileImage');
@@ -77,7 +90,18 @@ exports.deleteProduct = async (req, res) => {
 exports.updateProduct = async (req, res) => {
   try {
     const { title, description, category } = req.body;
-    const images = req.files ? req.files.map((file) => file.filename) : [];
+    const images = req.files
+      ? await Promise.all(
+        req.files.map((file) => {
+          return new Promise((resolve, reject) => {
+            cloudinary.uploader.upload_stream(
+              { folder: "hth/products" },
+              (err, res) => (err ? reject(err) : resolve(res.secure_url))
+            ).end(file.buffer);
+          });
+        })
+      )
+      : [];
 
     const updatedData = { title, description, category };
     if (images.length > 0) {
@@ -137,7 +161,7 @@ exports.getProductsByUser = async (req, res) => {
   try {
     const { userId } = req.params;
     const products = await Product.find({ user: userId }).populate('category')
-    .populate('user', 'name profileImage');
+      .populate('user', 'name profileImage');
     res.status(200).json(products);
   } catch (err) {
     res.status(500).json({ message: 'İstifadəçi məhsulları alınmadı', error: err.message });

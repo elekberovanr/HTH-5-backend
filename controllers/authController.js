@@ -2,6 +2,8 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const nodemailer = require('nodemailer');
+const cloudinary = require("../utils/cloudinary");
+
 
 // ✅ REGISTER (captcha YOX + şəkil optional)
 const register = async (req, res) => {
@@ -25,7 +27,22 @@ const register = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // 4) Optional profile image (multer fields istifadə edirik)
-    const profileImage = req.files?.profileImage?.[0]?.filename || 'Default-User.png';
+    let profileImage = "";
+
+    if (req.files?.profileImage?.[0]) {
+      const file = req.files.profileImage[0];
+
+      const result = await new Promise((resolve, reject) => {
+        cloudinary.uploader.upload_stream(
+          { folder: "hth/profile" },
+          (err, res) => (err ? reject(err) : resolve(res))
+        ).end(file.buffer);
+      });
+
+      profileImage = result.secure_url;
+    } else {
+      profileImage = "";
+    }
 
     // 5) Create user
     const user = new User({
@@ -98,12 +115,27 @@ const updateUser = async (req, res) => {
     const updatedData = { name, city, gender, birthday };
 
     if (req.files?.profileImage?.[0]) {
-      updatedData.profileImage = req.files.profileImage[0].filename;
+      const file = req.files.profileImage[0];
+      const result = await new Promise((resolve, reject) => {
+        cloudinary.uploader.upload_stream(
+          { folder: "hth/profile" },
+          (err, res) => (err ? reject(err) : resolve(res))
+        ).end(file.buffer);
+      });
+      updatedData.profileImage = result.secure_url;
     }
 
     if (req.files?.bannerImage?.[0]) {
-      updatedData.bannerImage = req.files.bannerImage[0].filename;
+      const file = req.files.bannerImage[0];
+      const result = await new Promise((resolve, reject) => {
+        cloudinary.uploader.upload_stream(
+          { folder: "hth/banner" },
+          (err, res) => (err ? reject(err) : resolve(res))
+        ).end(file.buffer);
+      });
+      updatedData.bannerImage = result.secure_url;
     }
+
 
     const updatedUser = await User.findByIdAndUpdate(userId, updatedData, { new: true });
     return res.status(200).json(updatedUser);

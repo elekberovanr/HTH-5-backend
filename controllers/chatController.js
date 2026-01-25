@@ -2,6 +2,8 @@ const Chat = require('../models/Chat');
 const Message = require('../models/Message');
 const User = require('../models/User');
 const { io } = require('../server');
+const cloudinary = require("../utils/cloudinary");
+
 
 exports.startChat = async (req, res) => {
   const senderId = req.userId;
@@ -68,7 +70,17 @@ exports.getChat = async (req, res) => {
 exports.sendMessage = async (req, res) => {
   try {
     const { chatId, content } = req.body;
-    const image = req.file?.filename;
+    let image = "";
+
+    if (req.file) {
+      const result = await new Promise((resolve, reject) => {
+        cloudinary.uploader.upload_stream(
+          { folder: "hth/chat" },
+          (err, res) => (err ? reject(err) : resolve(res))
+        ).end(req.file.buffer);
+      });
+      image = result.secure_url;
+    }
 
     const message = await Message.create({
       chat: chatId,
